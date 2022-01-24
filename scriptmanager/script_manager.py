@@ -1,17 +1,29 @@
 import json
 import sys
 import os
+import grpc
 
-from scriptmanager.context import Context, HttpContext
+from .context import Context, HttpContext
+from .event_pb2_grpc import EventHandlerStub
+from .event_pb2 import ExecActionRequest
+
 
 WORKSPACE = os.getenv("SCRIPT_WORKSPACE")
 RUN_TYPE = os.getenv("RUN_TYPE")
 READ_PIPE = int(os.getenv("READ_PIPE", "0"))
-TRIGGER_CONTEXT = os.getenv("TRIGGER_CONTEXT", "{}")
+CONTEXT = os.getenv("EXEC_CONTEXT", "{}")
 
 
-def get_http_context() -> HttpContext:
-    json_context = json.loads(TRIGGER_CONTEXT)
+class ContextError(Exception):
+    pass
+
+
+class ActionResponseError(Exception):
+    pass
+
+
+def _context() -> dict:
+    context = json.loads(CONTEXT)
 
     # try:
     #     r = os.fdopen(READ_PIPE)
@@ -23,29 +35,24 @@ def get_http_context() -> HttpContext:
     # with open(file_path, 'r', encoding='utf8') as f:
     #     json_context = json.load(f)
 
-    context = HttpContext()
-    context.script_id = json_context["script_id"]
-    context.script_name = json_context["script_name"]
-    context.run_type = json_context["run_type"]
-    context.trigger_type = json_context["trigger_type"]
-    context.trigger_id = json_context["trigger_id"]
-    context.api_name = json_context["api_name"]
-    context.namespace = json_context["namespace"]
-    context.group = json_context["group"]
-    context.method = json_context["method"]
-    context.query_string = json_context["query_string"]
-    context.body = json_context["body"]
-
     return context
 
 
 class ScriptManager:
 
-    base_url = "http://localhost:8910/__internal"
-
     def __init__(self) -> None:
 
-        self.context = get_http_context()
+        context = _context()
+
+        if len(context) == 0:
+            raise
+
+        # http | action | task | live
+        self.exec_type = ""
+
+        # method of http exec
+        self.http_method = None
+        # self.context = get_http_context()
 
     def http_response(self, response: dict) -> None:
         if type(response) != dict:
@@ -56,7 +63,7 @@ class ScriptManager:
     def action(self, act: str, data: dict = None, with_response: bool = False,
                with_callback: bool = False, callback=None, after=None, unit="minute") -> dict:
         """
-        The action function send a signal to the system to execute an action trigger
+        The action function send a event to the system to execute an action exec
         with the given configuration.
 
         :param act: unique action name
@@ -68,3 +75,15 @@ class ScriptManager:
         :param unit:
         :return:
         """
+
+        channel = grpc.insecure_channel("localhost:8080")
+        event = EventHandlerStub(channel)
+
+        reply = event.ExecAction()
+        response = {}
+
+        if not reply.success:
+            print(reply.message)
+            raise ActionResponseError
+        else:
+            response = json.loads(reply.response)

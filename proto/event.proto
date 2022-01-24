@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+
+service EventHandler {
+
+  rpc ExecAction (ExecActionRequest) returns (ExecActionReply) {}
+  rpc Test (TestMessage) returns (TestReply) {}
+}
+
+message ExecActionRequest {
+  // context execution
+  string script = 1;
+  string exec = 2;
+
+  // Action parameters
+  //
+  // Namespace can be empty and is not mandatory like in http triggers
+  string namespace = 3;
+
+  // The action name must be unique
+  string action = 4;
+  bool response = 5;
+
+  // timeout is the max time in seconds to wait for a response
+  // The default value is 0 and means that is no timeout
+  int32 timeout = 6;
+
+  // http callback it's a post request with the action response in the body
+  string httpCallback = 7;
+
+  // action callback contains the action response in the parameters
+  //
+  // the context data will be the context of the previous action
+  string actionCallback = 8;
+
+  // Request parameters are a json string that it will be parsed in the server
+  // this json will contain data required for the action
+  string requestData = 9;
+
+  // schedule data
+  //
+  // The schedule data allow the action to be executed in some pint in the future
+  // the units are seconds and minutes (sec/min)
+  // after takes an int value with the amount of unit that the action will be executed
+  // the limit it will be 60 minutes, after that it's recommended to use a task trigger
+  // the default unit value is minutes
+  string unit = 10;
+  int32 after = 11;
+}
+
+message ExecActionReply {
+  bool success = 1;
+  string message = 2;
+
+  // Response data of the action execution if the client wants to wait for the response
+  // the response is json formatted
+  string response = 3;
+}
+
+message TestMessage {
+  string message = 1;
+}
+
+message TestReply {
+  string message = 1;
+}
